@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Same Tune, New Chords</title>
+<meta name="description" content="Hear one famous melody reharmonized as jazz, gospel, film score, bossa nova and blues, and see exactly which chords changed and why.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a tune picker, a board of style keys, a live chord strip that lights up as the tune plays, then the analysis and the score. */
+:root {
+  --bg: #f1efe9;
+  --surface: #fbfaf7;
+  --ink: #1b1a24;
+  --muted: #625f70;
+  --line: #d9d5cc;
+  --accent: #3b3fd8;
+  --accent-ink: #ffffff;
+  --changed: #e8e1ff;
+  --changed-ink: #3b2fa0;
+  --now: #f2b33d;
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --body: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --c-original: #6b6878; --c-jazz: #3b3fd8; --c-gospel: #b0532a; --c-film: #1f7a6d; --c-bossa: #c08a12; --c-blues: #2f6bb3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14131b; --surface: #1d1c26; --ink: #ecebf3; --muted: #a3a0b3; --line: #33313f;
+    --accent: #8f93ff; --accent-ink: #14131b; --changed: #2e2a52; --changed-ink: #cfc6ff; --now: #f2b33d;
+    --c-original: #a3a0b3; --c-jazz: #8f93ff; --c-gospel: #f08a5d; --c-film: #4fc3ae; --c-bossa: #f2c14e; --c-blues: #6fa8ef;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14131b; --surface: #1d1c26; --ink: #ecebf3; --muted: #a3a0b3; --line: #33313f;
+  --accent: #8f93ff; --accent-ink: #14131b; --changed: #2e2a52; --changed-ink: #cfc6ff; --now: #f2b33d;
+  --c-original: #a3a0b3; --c-jazz: #8f93ff; --c-gospel: #f08a5d; --c-film: #4fc3ae; --c-bossa: #f2c14e; --c-blues: #6fa8ef;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+[hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; color: inherit; }
+:focus-visible { outline: 3px solid var(--now); outline-offset: 2px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 28px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+header { display: grid; gap: 10px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(38px, 7vw, 76px); line-height: .98; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.lede { margin: 0; max-width: 64ch; color: var(--muted); font-size: 17px; }
+
+.tunes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tunes .eyebrow { margin-right: 6px; }
+.tune { border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 16px; font-weight: 600; font-size: 15px; }
+.tune[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--bg); }
+
+.board { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.style { --c: var(--c-original); text-align: left; border: 1.5px solid var(--line); background: var(--surface); border-radius: 14px; padding: 14px 14px 12px; display: grid; gap: 4px; min-width: 0; position: relative; overflow: hidden; }
+.style::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 5px; background: var(--c); }
+.style b { font-family: var(--display); font-weight: 600; font-size: 21px; line-height: 1.1; }
+.style span { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.style[aria-pressed="true"] { border-color: var(--c); box-shadow: 0 0 0 2px var(--c) inset; }
+.style[aria-pressed="true"] b { color: var(--c); }
+.style .key { position: absolute; top: 10px; right: 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: grid; gap: 18px; min-width: 0; }
+.transport { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; }
+.play { width: 64px; height: 64px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; flex: none; }
+.play:disabled { opacity: .4; cursor: progress; }
+.play svg { width: 26px; height: 26px; fill: currentColor; }
+.now-title { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
+.now-title strong { font-family: var(--display); font-size: 22px; font-weight: 600; line-height: 1.2; }
+.status { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.opts { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 14px; }
+.opts label { display: inline-flex; gap: 8px; align-items: center; }
+.opts select { font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+.opts input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 12px; }
+.bar { display: flex; gap: 3px; min-width: 0; padding-left: 8px; border-left: 2px solid var(--line); }
+.cell { flex: var(--b) 1 0; min-width: 0; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); padding: 8px 4px 7px; display: grid; gap: 1px; position: relative; transition: transform .12s ease; }
+.cell .sym { font-family: var(--mono); font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell .rn { font-family: var(--display); font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell.changed { background: var(--changed); border-color: transparent; }
+.cell.changed .sym { color: var(--changed-ink); }
+.cell.color { border: 1.5px dashed var(--changed-ink); }
+.cell.now { outline: 3px solid var(--now); outline-offset: -1px; transform: translateY(-2px); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; background: var(--changed); }
+.legend i.same { background: var(--bg); border: 1px solid var(--line); }
+.legend i.color { background: var(--bg); border: 1.5px dashed var(--changed-ink); }
+
+.analysis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 20px 32px; }
+.analysis h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 0 0 6px; }
+.analysis p { margin: 0; max-width: 60ch; }
+.moves { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.moves li { padding-left: 16px; border-left: 3px solid var(--c, var(--accent)); }
+.count { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 10px; }
+
+.score-box { display: grid; gap: 8px; min-width: 0; }
+#score { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px; overflow-x: auto; color: var(--ink); }
+#score svg { max-width: 100%; height: auto; }
+footer { border-top: 1px solid var(--line); padding-top: 18px; display: grid; gap: 8px; font-size: 13px; color: var(--muted); }
+footer p { margin: 0; max-width: 80ch; }
+@media (max-width: 900px) { .board { grid-template-columns: repeat(3, minmax(0, 1fr)); } .analysis { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } .style b { font-size: 18px; } .stage { padding: 14px; } }
+@media (prefers-reduced-motion: reduce) { .cell { transition: none; } .cell.now { transform: none; } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.5.2/abcjs-basic-min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Music module · Reharmonization with Claude</p>
+    <h1>Same Tune, New Chords</h1>
+    <p class="lede">A melody you know plays on a loop. Switch the style while it plays: the melody never changes, only the chords and groove underneath. Every chord that differs from the original is highlighted, and the notes explain the technique behind it.</p>
+  </header>
+
+  <div class="tunes" role="group" aria-label="Tune">
+    <span class="eyebrow">Tune</span>
+    <div id="tunes" style="display:contents"></div>
+  </div>
+
+  <div class="board" id="board" role="group" aria-label="Style"></div>
+
+  <section class="stage" aria-label="Player">
+    <div class="transport">
+      <button class="play" id="play" type="button" aria-label="Play" disabled>
+        <svg viewBox="0 0 24 24" id="playIcon" aria-hidden="true" focusable="false"><path d="M7 4.5v15l13-7.5z"/></svg>
+      </button>
+      <div class="now-title">
+        <strong id="nowTitle">Loading…</strong>
+        <span class="status" id="status" role="status" aria-live="polite">Loading instruments…</span>
+      </div>
+      <div class="opts">
+        <label for="lead">Melody on
+          <select id="lead">
+            <option value="">the style's instrument</option>
+            <option value="acoustic_grand_piano">piano</option>
+            <option value="flute">flute</option>
+            <option value="alto_sax">alto sax</option>
+            <option value="trumpet">trumpet</option>
+            <option value="violin">violin</option>
+            <option value="vibraphone">vibraphone</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="melOn" checked> Play the melody</label>
+      </div>
+    </div>
+    <div class="strip" id="strip" aria-label="Chords, one box per chord, four bars per row"></div>
+    <div class="legend"><span><i></i>a new chord (different root)</span><span><i class="color"></i>same root, recolored (7th, 9th…)</span><span><i class="same"></i>same as the original</span><span>Big letters: chord symbol · small: Roman numeral</span></div>
+  </section>
+
+  <section class="analysis" aria-labelledby="styleName">
+    <div>
+      <p class="eyebrow">How this style reharmonizes</p>
+      <h2 id="styleName">Original</h2>
+      <p id="styleSummary"></p>
+      <p class="count" id="changeCount"></p>
+    </div>
+    <div>
+      <p class="eyebrow">The moves, in this tune</p>
+      <ul class="moves" id="moves"></ul>
+    </div>
+  </section>
+
+  <section class="score-box" aria-labelledby="scoreTitle">
+    <p class="eyebrow" id="scoreTitle">The melody with this style's chords (Roman numerals below the staff)</p>
+    <div id="score" role="img" aria-label="Sheet music of the melody with chord symbols and Roman numerals"></div>
+  </section>
+
+  <footer>
+    <p>The reharmonizations and analysis were written with Claude (Anthropic) for a music-module class project, then checked chord by chord against the melody. The melodies are public domain: "Twinkle, Twinkle, Little Star" (French, 1761), Beethoven's "Ode to Joy" (1824) and "Happy Birthday to You" (public domain in the US since 2016).</p>
+    <p>Instrument samples: FluidR3 General MIDI soundfont via midi-js-soundfonts. Drums are synthesized with the Web Audio API. Sheet music drawn with abcjs. Keyboard: 1–6 switch styles, space plays and stops.</p>
+    <p>© 2026. All rights reserved.</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+const SR = 44100;
+const $ = id => document.getElementById(id);
+
+/* ---------- music data ---------- */
+// Melodies: "note:beats" (beats default to 1). Chords: "symbol:beats". Every style's chords add up to the melody's length.
+const TUNES = {
+  twinkle: {
+    title: "Twinkle, Twinkle, Little Star", short: "Twinkle Twinkle", meter: 4, key: 0,
+    melody: "C5 C5 G5 G5 A5 A5 G5:2 F5 F5 E5 E5 D5 D5 C5:2 G5 G5 F5 F5 E5 E5 D5:2 G5 G5 F5 F5 E5 E5 D5:2 C5 C5 G5 G5 A5 A5 G5:2 F5 F5 E5 E5 D5 D5 C5:2",
+    styles: {
+      original: { bpm: 100, chords: "C:4 F:2 C:2 F:2 C:2 G:2 C:2 C:2 F:2 C:2 G:2 C:2 F:2 C:2 G:2 C:4 F:2 C:2 F:2 C:2 G:2 C:2" },
+      jazz: { bpm: 132, chords: "Cmaj7:2 A7:2 Dm7:2 G7:2 Fmaj7:2 Em7:2 Dm7:1 G7:1 Cmaj7:2 Em7:2 Ebdim7:2 Dm9:2 G13:2 Cmaj7:2 Bm7b5:2 E7:1 A7:1 Dm7:1 G7:1 Cmaj7:2 Eb7:2 Dm7:2 G7:2 Fmaj7:2 Em7:2 Dm7:1 G7:1 C6:2",
+        moves: ["Bar 1: A7 replaces the second half of C. It is a secondary dominant (V of ii) that pulls into Dm7.",
+                "Bar 5: Em7 → E♭°7 → Dm9 slides down by half steps; the diminished chord is a passing chord.",
+                "Bar 8: E7 → A7 → Dm7 → G7 runs around the circle of fifths, a classic jazz turnaround.",
+                "Bar 9: E♭7 takes the place of bar 1's A7. It is A7's tritone substitute: the same pull into Dm7, with a chromatic bass line."] },
+      gospel: { bpm: 72, chords: "C:2 C7:2 F:2 C/E:2 Fmaj7:2 C/E:2 Dm7:1 F/G:1 C:2 Am7:2 F:1 Fm6:1 C/G:2 F/G:2 C:2 Dm7:2 C/E:2 G7sus4:1 G7:1 C:2 C7:2 F:2 C/G:2 Fmaj7:2 Em7:1 A7:1 Dm7:1 G7:1 Fm6:1 C:1",
+        moves: ["Bar 1: C turns into C7 so it leans hard into F, a gospel staple.",
+                "Bars 2–3: C/E puts E in the bass, so the bass walks F–E by step instead of jumping.",
+                "Bar 6: F/G (IV over a G bass) stands in for G, the softer 'gospel dominant'.",
+                "Bars 5 and 12: F → F minor 6 → C is the minor-plagal 'amen' cadence."] },
+      film: { bpm: 70, chords: "C:2 Eb:2 F:2 C:2 Db:2 Am:2 Bb:2 C:2 Em:2 Fm:2 Am:2 Bb:2 Eb:2 Fm:2 Am:2 G:2 C:2 Eb:2 F:2 Eb:2 Db:2 C:2 Bb:2 C:2",
+        moves: ["Bar 1: E♭ (♭III), borrowed from C minor, arrives under the melody's G.",
+                "Bar 4: B♭ → C (♭VII–I) replaces G → C, the 'heroic' film cadence.",
+                "Bars 5 and 7: F minor (iv) darkens the original F major.",
+                "Bars 10–11: F → E♭ → D♭ → C step down by whole steps, all major chords, a technique called planing."] },
+      bossa: { bpm: 124, chords: "Cmaj7:2 C#dim7:2 Dm9:2 G13:2 Fmaj7:2 Em7:2 Dm7:1 G7:1 C69:2 Gm7:2 C7sus4:2 Fmaj7:2 Fm6:2 Em7:2 Eb9:2 Dm9:2 G13:2 Cmaj7:2 C#dim7:2 Dm9:2 G13:2 Fmaj7:2 Em7:2 Dm7:1 G7:1 C69:2",
+        moves: ["Bar 1: C♯°7 connects Cmaj7 to Dm9 with a rising bass line, C–C♯–D.",
+                "Bar 5: Gm7 → C7sus4 is a ii–V aimed at F, so bar 6 feels like a brief key change.",
+                "Bar 6: Fmaj7 → Fm6 is the signature bossa move: the IV chord turns minor under the melody.",
+                "Bar 7: E♭9, a tritone substitute, slides down into Dm9."] },
+      blues: { bpm: 104, chords: "C7:4 F7:2 C7:2 F7:2 C7:2 Dm7:1 G7:1 C7:2 C7:2 F7:2 C7:2 Bb7:2 C7:2 F7:2 A7:2 D7:1 G7:1 C7:4 F7:2 C7:2 F7:2 C7:2 G7:1 F7:1 C9:2",
+        moves: ["Every chord gets a flat 7th (C7, F7, G7), even the home chord: the core sound of the blues.",
+                "Bar 6: B♭7 (♭VII7) comes straight from the blues scale.",
+                "Bar 8: A7 → D7 → G7 is a turnaround that walks back home around the circle of fifths.",
+                "Bar 12: G7 → F7 → C9 ends on V–IV–I, the classic blues cadence."] },
+    },
+  },
+  ode: {
+    title: "Ode to Joy", short: "Ode to Joy", meter: 4, key: 0,
+    melody: "E5 E5 F5 G5 G5 F5 E5 D5 C5 C5 D5 E5 E5:1.5 D5:0.5 D5:2 E5 E5 F5 G5 G5 F5 E5 D5 C5 C5 D5 E5 D5:1.5 C5:0.5 C5:2",
+    styles: {
+      original: { bpm: 108, chords: "C:4 G7:4 C:4 C:2 G:2 C:4 G7:4 C:4 G:2 C:2" },
+      jazz: { bpm: 140, chords: "Cmaj7:2 Dm7:2 Em7:1 Dm7:1 Cmaj7:1 Bm7b5:1 Am7:2 D9:2 Dm9:2 G13:2 Cmaj7:2 Fmaj9:2 Em7:1 Eb9:1 Dm9:1 G7:1 Am7:2 D9:2 G13:2 C69:2",
+        moves: ["Bar 2: one chord per melody note (Em7, Dm7, Cmaj7, Bm7♭5). The harmony steps down the scale with the tune, a technique called planing.",
+                "Bar 3: D9 (V of V) makes the line lean toward G.",
+                "Bar 6: Em7 → E♭9 → Dm9 → G7 adds a chromatic tritone substitution.",
+                "Each cadence lands on G13 → C6/9 instead of plain G → C."] },
+      gospel: { bpm: 70, chords: "C:2 Dm7:1 C/E:1 G7sus4:1 G7:1 C/E:1 G/D:1 Am7:2 Dm7:1 C/E:1 C:2 F/G:2 C:2 F:1 C/G:1 C/G:1 Fm6:1 C/E:1 Dm7:1 F:2 Fm6:1 C/E:1 G7sus4:2 C:2",
+        moves: ["Bar 2: G7sus4 resolves to G7, the suspension church bands love.",
+                "Bar 4: F/G (IV over a G bass) stands in for plain G.",
+                "Bars 6–7: F minor 6 (iv), borrowed from the minor key, gives the churchy, bluesy color.",
+                "The bass walks by step under C/E, C/G and G/D instead of jumping between roots."] },
+      film: { bpm: 72, chords: "Am:2 F:2 Eb:2 Am:1 Bb:1 Ab:2 Bb:1 C:1 Am:2 Bb:2 C:2 Fm:2 Eb:2 C/E:1 Bb/D:1 Fm:2 Bb:1 C:1 Bb:2 C:2",
+        moves: ["Bar 1: opening on A minor instead of C makes the joyful theme sound serious.",
+                "Bar 3: A♭ → B♭ → C (♭VI–♭VII–I) is the epic film-score cadence.",
+                "Bars 5 and 7: F minor (iv), borrowed from C minor.",
+                "Bar 8: B♭ → C replaces the classical G → C ending."] },
+      bossa: { bpm: 128, chords: "C69:2 Dm9:2 Eb9:2 Dm9:2 Am7:2 D9:2 Dm9:2 G13:2 C69:2 Gm7:1 C9:1 Fmaj9:2 Em7:1 A7sus4:1 Am7:2 D9:2 G13:2 C69:2",
+        moves: ["Bar 2: E♭9 slides down to Dm9, a chromatic tritone-substitute move.",
+                "Bar 5: Gm7 → C9 briefly points the music toward F.",
+                "Bar 6: Fmaj9 and A7sus4 keep the harmony floating instead of resolving.",
+                "Phrases land on C6/9, the bossa nova home chord."] },
+      blues: { bpm: 110, chords: "C7:2 F9:2 C7:1 F7:1 C7:1 G7:1 F7:2 C9:2 A7:2 D7:1 G7:1 C7:2 F9:2 C7:1 F7:1 C7:1 G7:1 F7:2 C9:2 G7:1 F7:1 C7:2",
+        moves: ["Bar 2: one chord per beat (C7–F7–C7–G7) bounces between I, IV and V.",
+                "Bar 4: A7 → D7 → G7 walks home around the circle of fifths.",
+                "Every chord is a dominant 7th or 9th, even the home chord.",
+                "Bar 8: G7 → F7 → C7 is the V–IV–I blues ending."] },
+    },
+  },
+  birthday: {
+    title: "Happy Birthday to You", short: "Happy Birthday", meter: 3, key: 0,
+    melody: "r:2 G4:0.75 G4:0.25 A4 G4 C5 B4:2 G4:0.75 G4:0.25 A4 G4 D5 C5:2 G4:0.75 G4:0.25 G5 E5 C5 B4 A4 F5:0.75 F5:0.25 E5 C5 D5 C5:3",
+    styles: {
+      original: { bpm: 108, chords: "C:3 C:3 G7:3 G7:3 C:3 C7:3 F:3 C:2 G7:1 C:3" },
+      jazz: { bpm: 168, chords: "G7:3 Am7:3 G13:3 Dm7:2 G7:1 Cmaj7:2 Gm7:1 C7:3 Fmaj7#11:2 Bb7:1 Em7:1 Am7:1 G13:1 C69:3",
+        moves: ["The first 'birthday' gets Am7 instead of C. It contains every note the melody sings there (A, G, C).",
+                "Plain G7 becomes Dm7 → G7, a ii–V.",
+                "Under the high 'dear…' line, Fmaj7♯11 makes the melody's B a bright Lydian color, then B♭7 (a 'backdoor' dominant) leads home.",
+                "It is a jazz waltz: swung 3/4 with brushes and walking bass."] },
+      gospel: { bpm: 66, chords: "F/G:3 F/C:1 C:2 G/B:2 G7:1 Dm7:1 C/E:1 G7sus4:1 C:2 C7:1 C7/E:3 G7/B:1 F:1 Fm6:1 C/E:1 Am7:1 G7sus4:1 Fm6:1.5 C:1.5",
+        moves: ["The pickup sits over F/G, the soft gospel dominant.",
+                "G/B and C/E put the 3rd in the bass, so the bass walks by step.",
+                "F → F minor 6 under the melody's F is the minor-plagal church sound.",
+                "The last note is sung over F minor 6 → C, an 'amen' ending."] },
+      film: { bpm: 62, chords: "Em:3 F:2 Ab:1 G:2 Eb:1 F:2 Bb:1 Ab:2 Eb:1 C:3 Em:1 F:1 Fm:1 Am:1 Ab:1 Bb:1 C:3",
+        moves: ["A♭ (♭VI) and E♭ (♭III) are borrowed from C minor, so the party song sounds like a movie trailer.",
+                "The C major chord is held back until the highest note ('dear…') for maximum lift.",
+                "F → F minor darkens the line just before the ending.",
+                "A♭ → B♭ → C, the ♭VI–♭VII–I hero cadence, brings it home."] },
+      bossa: { bpm: 120, chords: "G13:3 C69:3 Em7:2 A7:1 Dm9:2 G13:1 Cmaj7:2 Gm7:1 C9:3 Fmaj7#11:2 Fm6:1 Em7:1 Ebdim7:1 Dm9:1 C69:3",
+        moves: ["C6/9 under the first phrase holds every melody note at once.",
+                "Under 'dear…', Fmaj7♯11 → Fm6 is the Jobim-style shift from major to minor IV.",
+                "Em7 → E♭°7 → Dm9 descends chromatically into the ending.",
+                "Waltz-time bossa (a Brazilian waltz) with nylon guitar and flute."] },
+      blues: { bpm: 96, chords: "G7:3 F7:1 C7:2 G7:3 F7:1 C7:1 G7:1 C7:3 C7:3 G7:1 F7:2 C7:1 Ab7:1 G7:1 C9:3",
+        moves: ["F7 under the first 'birthday' gives the quick IV of a blues.",
+                "Every chord is a dominant 7th, even C.",
+                "A♭7 → G7 near the end is a ♭VI7–V7 blues turnaround.",
+                "It ends on C9, a typical blues final chord."] },
+    },
+  },
+};
+const STYLES = {
+  original: { label: "Original", tag: "Simple I, IV and V triads", melody: "acoustic_grand_piano",
+    comps: [{ font: "acoustic_grand_piano", pattern: "block", gain: 0.5 }], bass: { font: "acoustic_grand_piano", pattern: "root", lift: 12 }, drums: null, swing: 0, reverb: 0.25,
+    summary: "The plain chords most people learned with this tune, built from the I, IV and V chords of the key. Everything else is measured against this." },
+  jazz: { label: "Jazz", tag: "Swing, 7ths, ii–V–I, substitutions", melody: "vibraphone",
+    comps: [{ font: "electric_piano_1", pattern: "charleston", gain: 0.55 }], bass: { font: "acoustic_bass", pattern: "walk" }, drums: "jazz", swing: 0.85, reverb: 0.3, rootless: true,
+    summary: "Swing rhythm, seventh and extended chords on everything, ii–V–I progressions wherever the tune lands, and substitutions that add chromatic motion. Vibraphone, electric piano, walking bass and a ride cymbal." },
+  gospel: { label: "Gospel", tag: "Slash chords, IV/V, minor iv", melody: "alto_sax",
+    comps: [{ font: "drawbar_organ", pattern: "block", gain: 0.22 }, { font: "acoustic_grand_piano", pattern: "backbeat", gain: 0.42 }], bass: { font: "electric_bass_finger", pattern: "gospel" }, drums: "gospel", swing: 1, reverb: 0.45,
+    summary: "A slow 12/8 church feel: slash chords that make the bass walk, IV-over-V instead of a plain V, suspensions, and the minor iv chord for the 'amen'. Organ, piano, sax, bass and a backbeat." },
+  film: { label: "Film score", tag: "Borrowed ♭III, ♭VI, ♭VII, iv", melody: "french_horn",
+    comps: [{ font: "string_ensemble_1", pattern: "block", gain: 0.42, spread: true }], bass: { font: "acoustic_bass", pattern: "root" }, drums: "film", swing: 0, reverb: 0.6,
+    summary: "Chords borrowed from the parallel minor key (♭III, ♭VI, ♭VII and iv) give an epic, cinematic lift, and cadences avoid the classical V–I. French horn, strings and big drums." },
+  bossa: { label: "Bossa nova", tag: "maj7, 6/9, chromatic passing", melody: "flute",
+    comps: [{ font: "acoustic_guitar_nylon", pattern: "bossa", gain: 0.6 }], bass: { font: "acoustic_bass", pattern: "bossa" }, drums: "bossa", swing: 0, reverb: 0.3, rootless: true,
+    summary: "Brazilian bossa nova in the style of Jobim: major sevenths, ninths and 6/9 chords, chromatic passing chords, and IV chords that turn minor. Syncopated nylon guitar, flute and soft percussion." },
+  blues: { label: "Blues", tag: "Dominant 7ths, shuffle, turnarounds", melody: "harmonica",
+    comps: [{ font: "acoustic_grand_piano", pattern: "shuffle", gain: 0.38 }], bass: { font: "electric_bass_finger", pattern: "boogie" }, drums: "blues", swing: 1, reverb: 0.25,
+    summary: "A shuffle where every chord is a dominant 7th, with blues turnarounds and V–IV–I endings. Harmonica, piano and a boogie bass line." },
+};
+const STYLE_ORDER = ["original", "jazz", "gospel", "film", "bossa", "blues"];
+
+/* ---------- parsing and theory ---------- */
+const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const QUAL = {
+  "": [0, 4, 7], m: [0, 3, 7], "7": [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], "9": [0, 4, 7, 10, 14], m9: [0, 3, 7, 10, 14],
+  "13": [0, 4, 7, 10, 14, 21], maj9: [0, 4, 7, 11, 14], "6": [0, 4, 7, 9], m6: [0, 3, 7, 9], "69": [0, 4, 7, 9, 14], dim7: [0, 3, 6, 9],
+  m7b5: [0, 3, 6, 10], "7sus4": [0, 5, 7, 10], "maj7#11": [0, 4, 7, 11, 18], sus4: [0, 5, 7],
+};
+const SHOW = { "": "", m: "m", "7": "7", maj7: "maj7", m7: "m7", "9": "9", m9: "m9", "13": "13", maj9: "maj9", "6": "6", m6: "m6", "69": "6/9", dim7: "°7", m7b5: "ø7", "7sus4": "7sus4", "maj7#11": "maj7♯11", sus4: "sus4" };
+const RN_SUFFIX = { "": "", m: "", "7": "7", maj7: "maj7", m7: "7", "9": "9", m9: "9", "13": "13", maj9: "maj9", "6": "6", m6: "6", "69": "6/9", dim7: "°7", m7b5: "ø7", "7sus4": "7sus4", "maj7#11": "maj7♯11", sus4: "sus4" };
+const MINORISH = new Set(["m", "m7", "m9", "m6", "dim7", "m7b5"]);
+const DEGREE = ["I", "♭II", "II", "♭III", "III", "IV", "♯IV", "V", "♭VI", "VI", "♭VII", "VII"];
+const pcOf = s => { const m = /^([A-G])([#b]?)/.exec(s); if (!m) return null; return (PC[m[1]] + (m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0) + 12) % 12; };
+const pretty = s => s.replace(/b(?=\d|$|m|\/|°|ø)/g, "♭").replace(/#/g, "♯");
+const noteToMidi = s => { const m = /^([A-G])([#b]?)(-?\d)$/.exec(s); if (!m) return null; return 12 * (+m[3] + 1) + PC[m[1]] + (m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0); };
+function parseMelody(str) {
+  return str.trim().split(/\s+/).map(tok => { const [n, b] = tok.split(":"); return { midi: n === "r" ? null : noteToMidi(n), b: b ? +b : 1 }; });
+}
+function parseChords(str, key) {
+  let beat = 0;
+  return str.trim().split(/\s+/).map(tok => {
+    const [sym, b] = tok.split(":"), [main, bass] = sym.split("/");
+    const m = /^([A-G][#b]?)(.*)$/.exec(main), q = m[2];
+    if (!(q in QUAL)) throw new Error("Unknown chord quality " + sym);
+    const root = pcOf(m[1]), deg = (root - key + 12) % 12;
+    let rn = DEGREE[deg]; if (MINORISH.has(q)) rn = rn.replace(/[IV]+/, x => x.toLowerCase());
+    rn += RN_SUFFIX[q];
+    if (q === "dim7" || q === "m7b5") rn = rn.replace(/7$/, "") + "7";
+    const c = { sym, label: pretty(m[1]) + SHOW[q] + (bass ? "/" + pretty(bass) : ""), rn: rn + (bass ? "/" + pretty(bass) : ""), root, q, bass: bass ? pcOf(bass) : null, beat, b: +b };
+    beat += +b;
+    return c;
+  });
+}
+for (const t of Object.values(TUNES)) {
+  t.notes = parseMelody(t.melody);
+  t.beats = t.notes.reduce((a, n) => a + n.b, 0);
+  for (const [id, s] of Object.entries(t.styles)) {
+    s.list = parseChords(s.chords, t.key);
+    const total = s.list.reduce((a, c) => a + c.b, 0);
+    if (Math.abs(total - t.beats) > 1e-6) console.warn("Chord length mismatch", t.title, id, total, t.beats);
+  }
+  const orig = t.styles.original.list;
+  const origAt = beat => { let c = orig[0]; for (const x of orig) { if (x.beat <= beat + 1e-6) c = x; else break; } return c; };
+  for (const s of Object.values(t.styles)) for (const c of s.list) { const o = origAt(c.beat); c.changed = o.root !== c.root; c.recolored = !c.changed && (o.q !== c.q || o.bass !== c.bass); }
+  t.styles.original.list.forEach(c => (c.changed = c.recolored = false));
+}
+
+/* ---------- instrument samples (FluidR3 GM), decoded note by note on demand ---------- */
+const SF_BASE = "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/";
+const FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const fontData = {}, decoded = {};
+function loadFontData(name) {
+  if (!fontData[name]) {
+    fontData[name] = new Promise((resolve, reject) => {
+      window.MIDI = window.MIDI || {}; window.MIDI.Soundfont = window.MIDI.Soundfont || {};
+      const s = document.createElement("script"); s.src = SF_BASE + name + "-mp3.js";
+      s.onload = () => (window.MIDI.Soundfont[name] ? resolve(window.MIDI.Soundfont[name]) : reject(new Error("empty " + name)));
+      s.onerror = () => reject(new Error("could not load " + name));
+      document.head.append(s);
+    });
+    fontData[name].catch(() => delete fontData[name]);
+  }
+  return fontData[name];
+}
+const decoder = new OfflineAudioContext(1, 1, SR);
+async function ensureNotes(name, midis) {
+  const data = await loadFontData(name), map = (decoded[name] = decoded[name] || new Map());
+  await Promise.all([...new Set(midis)].map(async m => {
+    if (map.has(m)) return;
+    let k = m, tries = 0, uri;
+    while (!(uri = data[FLATS[((k % 12) + 12) % 12] + (Math.floor(k / 12) - 1)]) && tries++ < 24) k += tries % 2 ? tries : -tries;
+    if (!uri) return;
+    const p = fetch(uri).then(r => r.arrayBuffer()).then(b => decoder.decodeAudioData(b)).then(buf => ({ buf, shift: m - k }));
+    map.set(m, p);
+  }));
+  const out = new Map();
+  for (const m of midis) { const p = map.get(m); if (p) { try { out.set(m, await p); } catch {} } }
+  return out;
+}
+function samplePlay(ctx, notes, m, t, d, v, dest, rel = 0.25) {
+  const n = notes.get(m); if (!n) return;
+  const src = ctx.createBufferSource(); src.buffer = n.buf; src.playbackRate.value = Math.pow(2, n.shift / 12);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.008);
+  g.gain.setTargetAtTime(0.0001, t + Math.max(0.02, d), rel / 3);
+  src.connect(g).connect(dest); src.start(t); src.stop(Math.min(t + d + rel + 0.2, t + n.buf.duration));
+}
+
+/* ---------- arranging: comping, bass and drum patterns ---------- */
+const COMP = {
+  charleston: { 4: [[0, 0.8, 1], [1.5, 0.9, 0.85]], 3: [[1, 0.5, 0.85], [2, 0.5, 0.85]] },
+  backbeat: { 4: [[1, 0.45, 1], [3, 0.45, 1]], 3: [[1, 0.4, 0.9], [2, 0.4, 0.9]] },
+  bossa: { 4: [[0, 0.45, 1], [1.5, 0.45, 0.8], [2.5, 0.45, 0.85]], 3: [[0, 0.45, 1], [1.5, 0.45, 0.8]] },
+  shuffle: { 4: [[0, 0.3, 1], [1, 0.3, 0.8], [1.5, 0.2, 0.55], [2, 0.3, 0.9], [3, 0.3, 0.8], [3.5, 0.2, 0.55]], 3: [[0, 0.3, 1], [1, 0.3, 0.8], [1.5, 0.2, 0.55], [2, 0.3, 0.8]] },
+};
+const BASS = {
+  gospel: [[0, "root", 1.5], [1.5, "oct", 0.5], [2, "fifth", 1.5], [3.5, "approach", 0.5]],
+  bossa: [[0, "root", 1.5], [2, "fifth", 1.5]],
+};
+const DRUMS = {
+  jazz: { 4: { ride: [0, 1, 1.5, 2, 3, 3.5], chick: [1, 3] }, 3: { ride: [0, 1, 1.5, 2], chick: [1, 2] } },
+  gospel: { 4: { kick: [0, 2.5], snare: [1, 3], hat: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5] }, 3: { kick: [0], snare: [2], hat: [0, 0.5, 1, 1.5, 2, 2.5] } },
+  film: { 4: { big: [0], big2: [2.5, 3] }, 3: { big: [0], big2: [2] } },
+  bossa: { 4: { kick: [0, 1.5, 2, 3.5], rim: [0, 0.75, 1.5, 2.5, 3], hat: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5] }, 3: { kick: [0, 1.5], rim: [0, 1, 2], hat: [0, 0.5, 1, 1.5, 2, 2.5] } },
+  blues: { 4: { kick: [0, 2], snare: [1, 3], hat: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5] }, 3: { kick: [0], snare: [1, 2], hat: [0, 0.5, 1, 1.5, 2, 2.5] } },
+};
+const bassMidi = pc => 33 + ((pc - 9 + 12) % 12); // A1 to G#2
+function plan(tuneId, styleId, leadOverride) {
+  const tune = TUNES[tuneId], st = STYLES[styleId], data = tune.styles[styleId];
+  const spb = 60 / data.bpm, meter = tune.meter, total = tune.beats, swing = st.swing;
+  const shift = beat => { const f = ((beat % 1) + 1) % 1; if (Math.abs(f - 0.5) < 0.01) return swing * spb / 6; if (Math.abs(f - 0.25) < 0.01 || Math.abs(f - 0.75) < 0.01) return swing * spb / 12; return 0; };
+  const at = beat => beat * spb + shift(beat);
+  const chords = data.list;
+  const chordAt = beat => { let c = chords[0]; for (const x of chords) { if (x.beat <= beat + 1e-6) c = x; else break; } return c; };
+  const ev = { melody: [], comps: st.comps.map(() => []), bass: [], drums: [] };
+  // melody
+  let b = 0;
+  for (const n of tune.notes) { if (n.midi != null) ev.melody.push({ m: n.midi, t: at(b), d: at(b + n.b) - at(b) }); b += n.b; }
+  // chords, voiced to move as little as possible from one chord to the next
+  let prev = null;
+  const voices = chords.map(c => {
+    let pcs = QUAL[c.q].map(i => (c.root + i) % 12).filter((x, i, a) => a.indexOf(x) === i);
+    if (pcs.length > 4) pcs = pcs.filter(x => x !== (c.root + 7) % 12);
+    if (pcs.length > 4 || (st.rootless && pcs.length >= 4)) pcs = pcs.filter(x => x !== c.root);
+    const cands = [];
+    for (let inv = 0; inv < pcs.length; inv++) {
+      const order = pcs.slice(inv).concat(pcs.slice(0, inv));
+      for (let low = 50; low <= 62; low++) {
+        if (low % 12 !== order[0]) continue;
+        const v = [low]; for (const pc of order.slice(1)) { let m = v[v.length - 1] + 1; while (m % 12 !== pc) m++; v.push(m); }
+        if (v[v.length - 1] <= 72) cands.push(v);
+      }
+    }
+    const center = v => v.reduce((a, x) => a + x, 0) / v.length;
+    const target = prev ? center(prev) : 60;
+    cands.sort((x, y) => Math.abs(center(x) - target) - Math.abs(center(y) - target));
+    prev = cands[0] || pcs.map(pc => 60 + pc);
+    return prev;
+  });
+  st.comps.forEach((comp, k) => {
+    const out = ev.comps[k];
+    const hit = (c, ci, beat, len, vel) => {
+      const notes = voices[ci].slice();
+      if (comp.spread) notes.unshift(voices[ci][0] - 12);
+      for (const [i, m] of notes.entries()) out.push({ m, t: at(beat) + (comp.font.includes("guitar") ? i * 0.014 : 0), d: at(beat + len) - at(beat), v: vel });
+    };
+    if (comp.pattern === "block") { chords.forEach((c, ci) => hit(c, ci, c.beat, c.b, 1)); return; }
+    const pat = COMP[comp.pattern][meter], started = new Set();
+    for (let bar = 0; bar * meter < total; bar++) for (const [o, len, vel] of pat) {
+      const beat = bar * meter + o; if (beat >= total - 1e-6) continue;
+      const c = chordAt(beat), ci = chords.indexOf(c);
+      if (Math.abs(beat - c.beat) < 1e-6) started.add(ci);
+      hit(c, ci, beat, Math.min(len, c.beat + c.b - beat), vel);
+    }
+    chords.forEach((c, ci) => { if (!started.has(ci)) hit(c, ci, c.beat, Math.min(0.6, c.b), 0.9); });
+  });
+  // bass
+  const bs = st.bass, lift = bs.lift || 0;
+  chords.forEach((c, ci) => {
+    const r = bassMidi(c.bass ?? c.root) + lift, next = chords[ci + 1] || chords[0];
+    const nr = bassMidi(next.bass ?? next.root) + lift;
+    const minor = MINORISH.has(c.q), third = r + (minor ? 3 : 4), fifth = r + (c.q === "dim7" || c.q === "m7b5" ? 6 : 7);
+    const approach = Math.abs(nr - 1 - r) <= Math.abs(nr + 1 - r) ? nr - 1 : nr + 1;
+    const add = (o, m, len) => { if (o < c.b - 1e-6) ev.bass.push({ m, t: at(c.beat + o), d: at(c.beat + Math.min(c.b, o + len)) - at(c.beat + o) }); };
+    if (bs.pattern === "root") add(0, r, c.b);
+    else if (bs.pattern === "walk") {
+      const n = Math.max(1, Math.round(c.b));
+      for (let i = 0; i < n; i++) add(i, i === 0 ? r : i === n - 1 ? approach : [fifth, third, r + 12][(i - 1) % 3], 0.95);
+    } else if (bs.pattern === "boogie") {
+      const line = [r, r + 4, r + 7, r + 9, r + 10, r + 9, r + 7, r + 4];
+      // up the chord on one chord, back down on the next
+      for (let i = 0; i < Math.max(1, Math.round(c.b)); i++) add(i, line[(i + (ci % 2) * 4) % line.length], 0.9);
+    } else for (const [o, role, len] of BASS[bs.pattern]) add(o, { root: r, oct: r + 12, fifth, approach }[role], len);
+  });
+  // drums
+  const dp = st.drums && DRUMS[st.drums][meter];
+  if (dp) for (let bar = 0; bar * meter < total; bar++) {
+    for (const [inst, offs] of Object.entries(dp)) for (const o of offs) {
+      const beat = bar * meter + o; if (beat >= total - 1e-6) continue;
+      if (inst === "big2" && bar % 2 === 0) continue;
+      ev.drums.push({ inst, t: at(beat), v: 1, swell: st.drums === "film" && inst === "big" && bar % 4 === 3 });
+    }
+  }
+  const melodyFont = leadOverride || st.melody;
+  return { spb, dur: total * spb, ev, voices, melodyFont, st };
+}
+
+/* ---------- rendering one loop of a tune in one style ---------- */
+let noiseBuf = null;
+function noise(ctx) { if (noiseBuf) return noiseBuf; const b = ctx.createBuffer(1, SR, SR), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return (noiseBuf = b); }
+function irBuffer(ctx, sec) { const len = Math.floor(SR * sec), b = ctx.createBuffer(2, len, SR); for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); } return b; }
+async function renderLoop(tuneId, styleId, leadOverride, melodyOn) {
+  const p = plan(tuneId, styleId, leadOverride);
+  // decode only the notes this arrangement uses
+  const need = {}; const want = (font, m) => (need[font] = need[font] || []).push(m);
+  if (melodyOn) p.ev.melody.forEach(n => want(p.melodyFont, n.m));
+  p.st.comps.forEach((c, k) => p.ev.comps[k].forEach(n => want(c.font, n.m)));
+  p.ev.bass.forEach(n => want(p.st.bass.font, n.m));
+  const banks = {};
+  await Promise.all(Object.entries(need).map(async ([font, ms]) => { banks[font] = await ensureNotes(font, ms); }));
+
+  const len = Math.ceil(p.dur * SR);
+  // render a little past the loop and fold the tail back to the start so reverb and ringing notes loop seamlessly
+  const tail = Math.floor(SR * 2.5);
+  const ctx = new OfflineAudioContext(2, len + tail, SR);
+  const master = ctx.createGain(); master.gain.value = 0.9;
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.2;
+  master.connect(comp).connect(ctx.destination);
+  const conv = ctx.createConvolver(); conv.buffer = irBuffer(ctx, 1 + p.st.reverb * 2.5);
+  const rev = ctx.createGain(); rev.gain.value = 0.2 + p.st.reverb * 0.5; rev.connect(conv).connect(master);
+  const bus = (g, send, pan = 0) => { const x = ctx.createGain(); x.gain.value = g; const pn = ctx.createStereoPanner(); pn.pan.value = pan; x.connect(pn); pn.connect(master); const s = ctx.createGain(); s.gain.value = send; pn.connect(s).connect(rev); return x; };
+  const busMel = bus(0.95, 0.55, 0.05), busBass = bus(0.85, 0.1), busDrums = bus(0.5, 0.15);
+  const busComps = p.st.comps.map((c, k) => bus(c.gain, 0.6, k ? 0.2 : -0.15));
+  if (melodyOn) p.ev.melody.forEach(n => samplePlay(ctx, banks[p.melodyFont], n.m, n.t, n.d, 0.9, busMel, 0.2));
+  p.st.comps.forEach((c, k) => p.ev.comps[k].forEach(n => samplePlay(ctx, banks[c.font], n.m, n.t, n.d, 0.55 * n.v, busComps[k], c.pattern === "block" ? 0.5 : 0.18)));
+  p.ev.bass.forEach(n => samplePlay(ctx, banks[p.st.bass.font], n.m, n.t, n.d, 1, busBass, 0.08));
+  // synthesized drums
+  const nz = noise(ctx);
+  const nhit = (t, type, f, q, dec, v) => { const s = ctx.createBufferSource(); s.buffer = nz; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0005, t + dec); s.connect(fl).connect(g).connect(busDrums); s.start(t, Math.random() * 0.5); s.stop(t + dec + 0.05); };
+  const tone = (t, f0, f1, dec, v, type = "sine") => { const o = ctx.createOscillator(); o.type = type; const g = ctx.createGain(); o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dec * 0.4); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, t + dec); o.connect(g).connect(busDrums); o.start(t); o.stop(t + dec + 0.05); };
+  for (const d of p.ev.drums) {
+    const t = d.t;
+    if (d.inst === "kick") tone(t, 140, 48, 0.35, 0.9);
+    else if (d.inst === "snare") { nhit(t, "highpass", 1500, 0.7, 0.18, 0.45); tone(t, 200, 160, 0.12, 0.35, "triangle"); if (styleId === "gospel") [0, 0.012, 0.024].forEach(o => nhit(t + o, "bandpass", 1300, 1.2, 0.06, 0.35)); }
+    else if (d.inst === "hat") nhit(t, "highpass", 7500, 0.7, 0.045, 0.14);
+    else if (d.inst === "ride") { nhit(t, "bandpass", 6200, 1.5, 0.35, 0.16); nhit(t, "highpass", 9000, 0.7, 0.08, 0.06); }
+    else if (d.inst === "chick") nhit(t, "bandpass", 4200, 2, 0.05, 0.16);
+    else if (d.inst === "rim") nhit(t, "bandpass", 2300, 4, 0.04, 0.4);
+    else if (d.inst === "big" || d.inst === "big2") { tone(t, 90, 42, 1.1, d.inst === "big" ? 1 : 0.6); nhit(t, "lowpass", 400, 0.7, 0.4, 0.35); }
+    if (d.swell) { const s = ctx.createBufferSource(); s.buffer = nz; const fl = ctx.createBiquadFilter(); fl.type = "highpass"; fl.frequency.value = 3000; const g = ctx.createGain(); const st0 = t + p.spb * (TUNES[tuneId].meter - 1.5); g.gain.setValueAtTime(0.0001, st0); g.gain.exponentialRampToValueAtTime(0.18, st0 + p.spb * 1.5); g.gain.exponentialRampToValueAtTime(0.0001, st0 + p.spb * 1.5 + 0.05); s.connect(fl).connect(g).connect(busDrums); s.start(st0); s.stop(st0 + p.spb * 1.6); }
+  }
+  const raw = await ctx.startRendering();
+  const out = new AudioBuffer({ numberOfChannels: 2, length: len, sampleRate: SR });
+  let peak = 0;
+  for (let ch = 0; ch < 2; ch++) {
+    const src = raw.getChannelData(ch), dst = out.getChannelData(ch);
+    dst.set(src.subarray(0, len));
+    for (let i = 0; i < tail && i < len; i++) dst[i] += src[len + i];
+    for (let i = 0; i < len; i++) if (Math.abs(dst[i]) > peak) peak = Math.abs(dst[i]);
+  }
+  const k = peak > 0 ? 0.85 / peak : 1;
+  for (let ch = 0; ch < 2; ch++) { const d = out.getChannelData(ch); for (let i = 0; i < len; i++) d[i] *= k; }
+  return { buf: out, plan: p };
+}
+
+/* ---------- sheet music ---------- */
+const NAMES = [["C", 0], ["D", -1], ["D", 0], ["E", -1], ["E", 0], ["F", 0], ["F", 1], ["G", 0], ["A", -1], ["A", 0], ["B", -1], ["B", 0]];
+function toAbc(tune, styleId) {
+  const chords = tune.styles[styleId].list, U = 8, barLen = tune.meter * U;
+  const ev = []; let pos = 0;
+  for (const n of tune.notes) { const len = Math.round(n.b * U); ev.push({ pos, len, midi: n.midi }); pos += len; }
+  const chordAt = new Map(chords.map(c => [Math.round(c.beat * U), c]));
+  const cuts = new Set([...chordAt.keys()]); for (let b = 0; b <= pos; b += barLen) cuts.add(b);
+  const LENS = [32, 24, 16, 12, 8, 6, 4, 3, 2, 1];
+  let state = {}, out = "", bars = 0;
+  const abcSym = c => c.sym.replace("maj7#11", "maj7#11").replace("69", "6/9").replace("dim7", "dim7").replace("m7b5", "m7b5");
+  const pitch = midi => {
+    const [letter, alter] = NAMES[midi % 12], natural = midi - alter, oct = Math.floor(natural / 12) - 1, id = letter + oct;
+    let acc = ""; if (alter !== (state[id] ?? 0)) { acc = alter === 1 ? "^" : alter === -1 ? "_" : "="; state[id] = alter; }
+    return acc + (oct >= 5 ? letter.toLowerCase() + "'".repeat(oct - 5) : letter + ",".repeat(Math.max(0, 4 - oct)));
+  };
+  for (const e of ev) {
+    const pieces = []; let p = e.pos; const end = e.pos + e.len;
+    while (p < end) {
+      let next = end; for (const c of cuts) if (c > p && c < next) next = c;
+      let rem = next - p;
+      while (rem > 0) { const inBar = p % barLen, l = LENS.find(x => x <= rem && (inBar % x === 0 || x <= 8)) || 1; pieces.push([p, l]); p += l; rem -= l; }
+    }
+    pieces.forEach(([pp, l], i) => {
+      if (pp > 0 && pp % barLen === 0) { bars++; out += bars % 4 === 0 ? " |\n" : " | "; state = {}; }
+      if (chordAt.has(pp)) { const c = chordAt.get(pp); out += `"${abcSym(c)}""_${c.rn.replace(/♭/g, "b").replace(/♯/g, "#")}"`; }
+      out += (e.midi == null ? "z" : pitch(e.midi)) + (l === 1 ? "" : l) + (e.midi != null && i < pieces.length - 1 ? "-" : "") + " ";
+    });
+  }
+  return `X:1\nM:${tune.meter}/4\nL:1/32\nQ:1/4=${tune.styles[styleId].bpm}\nK:C\n${out}|]\n`;
+}
+function drawScore() {
+  const box = $("score");
+  if (!window.ABCJS) { box.textContent = "The sheet music library didn't load."; return; }
+  const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#000";
+  const w = Math.max(300, Math.min(980, box.clientWidth - 24));
+  try { window.ABCJS.renderAbc(box, toAbc(TUNES[state.tune], state.style), { staffwidth: w, scale: w < 520 ? 0.8 : 1, foregroundColor: ink, paddingleft: 0, paddingright: 0, wrap: { minSpacing: 1.6, maxSpacing: 2.8, preferredMeasuresPerLine: w < 520 ? 2 : 4 } }); }
+  catch (e) { console.warn(e); box.textContent = "The sheet music couldn't be drawn."; }
+}
+
+/* ---------- player ---------- */
+const state = { tune: "twinkle", style: "original" };
+let actx = null, cur = null, raf = 0, prepToken = 0;
+const cache = new Map();
+const cacheKey = (t, s) => `${t}|${s}|${$("lead").value}|${$("melOn").checked ? 1 : 0}`;
+function getLoop(t, s) {
+  const key = cacheKey(t, s);
+  if (!cache.has(key)) { const pr = renderLoop(t, s, $("lead").value || null, $("melOn").checked); cache.set(key, pr); pr.catch(() => cache.delete(key)); }
+  return cache.get(key);
+}
+function ensureCtx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); return actx; }
+function position() { if (!cur) return 0; const d = cur.buf.duration; return ((actx.currentTime - cur.startAt + cur.offset) % d + d) % d; }
+function startSource(loop, offset, fade) {
+  const src = actx.createBufferSource(); src.buffer = loop.buf; src.loop = true;
+  const g = actx.createGain(); src.connect(g).connect(actx.destination);
+  const now = actx.currentTime;
+  g.gain.setValueAtTime(fade ? 0.0001 : 1, now); if (fade) g.gain.exponentialRampToValueAtTime(1, now + 0.12);
+  src.start(now, offset);
+  return { src, g, buf: loop.buf, plan: loop.plan, startAt: now, offset, style: state.style, tune: state.tune };
+}
+function stopSource(s, fade) {
+  if (!s) return;
+  const now = actx.currentTime;
+  if (fade) { s.g.gain.setValueAtTime(s.g.gain.value, now); s.g.gain.exponentialRampToValueAtTime(0.0001, now + 0.15); s.src.stop(now + 0.2); }
+  else s.src.stop();
+}
+async function play() {
+  ensureCtx();
+  setStatus("Getting the instruments ready…");
+  const loop = await getLoop(state.tune, state.style);
+  stopSource(cur, false);
+  cur = startSource(loop, 0, false);
+  setPlaying(true); setStatus("Playing on a loop. Switch styles any time.");
+  tick();
+  prefetch();
+}
+function stop() { stopSource(cur, true); cur = null; cancelAnimationFrame(raf); setPlaying(false); highlight(-1); setStatus("Stopped"); }
+async function switchTo(style, force = false) {
+  if (!force && style === state.style && cur && cur.style === style && cur.tune === state.tune) return;
+  state.style = style; updateUI();
+  if (!cur) return;
+  const frac = position() / cur.buf.duration, token = ++prepToken;
+  const ready = cache.has(cacheKey(state.tune, style));
+  if (!ready) setStatus("Preparing " + STYLES[style].label.toLowerCase() + "…");
+  const loop = await getLoop(state.tune, style);
+  if (token !== prepToken || !cur) return;
+  const nowFrac = ready ? frac : position() / cur.buf.duration;
+  const old = cur;
+  cur = startSource(loop, nowFrac * loop.buf.duration, true);
+  stopSource(old, true);
+  setStatus("Playing on a loop. Switch styles any time.");
+}
+async function prefetch() {
+  for (const s of STYLE_ORDER) { try { await getLoop(state.tune, s); } catch {} }
+  if (!cur) setStatus("Ready");
+}
+function tick() {
+  if (!cur) return;
+  const p = cur.plan, frac = position() / cur.buf.duration;
+  const beat = frac * TUNES[cur.tune].beats;
+  const list = TUNES[cur.tune].styles[cur.style].list;
+  let idx = 0; list.forEach((c, i) => { if (c.beat <= beat + 1e-6) idx = i; });
+  highlight(idx);
+  raf = requestAnimationFrame(tick);
+}
+
+/* ---------- UI ---------- */
+function setStatus(t) { $("status").textContent = t; }
+function setPlaying(on) {
+  $("playIcon").innerHTML = on ? '<rect x="6" y="6" width="12" height="12" rx="1.5"/>' : '<path d="M7 4.5v15l13-7.5z"/>';
+  $("play").setAttribute("aria-label", on ? "Stop" : "Play");
+}
+let lastHi = -2;
+function highlight(i) {
+  if (i === lastHi) return; lastHi = i;
+  $("strip").querySelectorAll(".cell").forEach((el, k) => el.classList.toggle("now", k === i));
+}
+for (const [id, t] of Object.entries(TUNES)) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "tune"; b.dataset.tune = id; b.textContent = t.short;
+  b.onclick = () => selectTune(id);
+  $("tunes").append(b);
+}
+STYLE_ORDER.forEach((id, i) => {
+  const st = STYLES[id], b = document.createElement("button");
+  b.type = "button"; b.className = "style"; b.dataset.style = id; b.style.setProperty("--c", `var(--c-${id})`);
+  b.innerHTML = `<span class="key" aria-hidden="true">${i + 1}</span><b></b><span></span>`;
+  b.querySelector("b").textContent = st.label; b.querySelector("span:last-child").textContent = st.tag;
+  b.onclick = () => { if (cur) switchTo(id); else { state.style = id; updateUI(); } };
+  $("board").append(b);
+});
+function updateUI() {
+  const tune = TUNES[state.tune], st = STYLES[state.style], data = tune.styles[state.style];
+  document.querySelectorAll(".tune").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tune === state.tune)));
+  document.querySelectorAll(".style").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.style === state.style)));
+  $("nowTitle").textContent = `${tune.title} · ${st.label}`;
+  $("styleName").textContent = st.label;
+  $("styleName").style.color = `var(--c-${state.style})`;
+  $("styleSummary").textContent = st.summary;
+  const changed = data.list.filter(c => c.changed).length, recol = data.list.filter(c => c.recolored).length;
+  $("changeCount").textContent = state.style === "original" ? `${data.list.length} chords · ${data.bpm} bpm` : `${data.list.length} chords: ${changed} new, ${recol} recolored · ${data.bpm} bpm · melody unchanged`;
+  const moves = data.moves || ["This is the reference version. Pick a style to hear what changes."];
+  $("moves").style.setProperty("--c", `var(--c-${state.style})`);
+  $("moves").replaceChildren(...moves.map(m => { const li = document.createElement("li"); li.textContent = m; return li; }));
+  // chord strip: one group per bar, one box per chord sized by its length
+  const bars = [];
+  data.list.forEach(c => { const n = Math.floor(c.beat / tune.meter + 1e-6); (bars[n] = bars[n] || []).push(c); });
+  $("strip").replaceChildren(...bars.filter(Boolean).map(group => { const bar = document.createElement("div"); bar.className = "bar"; bar.append(...group.map(c => {
+    const el = document.createElement("div"); el.className = "cell" + (c.changed ? " changed" : c.recolored ? " color" : "");
+    el.style.setProperty("--b", c.b);
+    el.title = `${c.label} (${c.rn})${c.changed ? ", a new chord" : c.recolored ? ", recolored from the original" : ""}`;
+    el.innerHTML = '<span class="sym"></span><span class="rn"></span>';
+    el.children[0].textContent = c.label; el.children[1].textContent = c.rn;
+    return el;
+  })); return bar; }));
+  lastHi = -2;
+  drawScore();
+  try { history.replaceState(null, "", `#${state.tune}-${state.style}`); } catch {}
+}
+async function selectTune(id) {
+  if (id === state.tune) return;
+  const wasPlaying = !!cur;
+  if (cur) { stopSource(cur, true); cur = null; cancelAnimationFrame(raf); setPlaying(false); }
+  state.tune = id; updateUI();
+  if (wasPlaying) play(); else { setStatus("Getting the instruments ready…"); getLoop(state.tune, state.style).then(() => { $("play").disabled = false; setStatus("Ready"); }).catch(loadError); }
+}
+function loadError(e) { console.warn(e); setStatus("The instrument samples couldn't load. Check your connection and reload."); }
+$("play").onclick = () => { ensureCtx(); cur ? stop() : play().catch(loadError); };
+const refresh = () => { cache.clear(); if (cur) switchTo(state.style, true); else getLoop(state.tune, state.style).catch(loadError); };
+$("lead").addEventListener("change", refresh);
+$("melOn").addEventListener("change", refresh);
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, select, textarea")) return;
+  if (e.key >= "1" && e.key <= "6") { const id = STYLE_ORDER[+e.key - 1]; if (cur) switchTo(id); else { state.style = id; updateUI(); } }
+  if (e.key === " " && !e.target.closest("button")) { e.preventDefault(); $("play").click(); }
+});
+let scoreTimer = 0;
+const redraw = () => { clearTimeout(scoreTimer); scoreTimer = setTimeout(drawScore, 150); };
+window.addEventListener("resize", redraw);
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", redraw);
+new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
+
+// start from the link, e.g. #ode-jazz
+const [ht, hs] = location.hash.slice(1).split("-");
+if (TUNES[ht]) state.tune = ht;
+if (STYLES[hs]) state.style = hs;
+updateUI();
+getLoop(state.tune, state.style).then(() => { $("play").disabled = false; setStatus("Ready. Press play, then switch styles while it plays."); }).catch(loadError);
+window.__sameTune = { TUNES, plan, renderLoop };
+})();
+</script>
+</body>
+</html>
